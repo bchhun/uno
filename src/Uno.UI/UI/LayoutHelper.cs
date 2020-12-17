@@ -3,6 +3,7 @@ using System.Diagnostics.Contracts;
 using System.Runtime.CompilerServices;
 using Windows.Foundation;
 using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 using static System.Double;
 using static System.Math;
 
@@ -106,6 +107,8 @@ namespace Uno.UI
 					offset.X = 0;
 					overflow = true;
 					break;
+				case HorizontalAlignment.Stretch when e is Popup && clientSize.Width == 0:
+					// without an explicit width/height, a popup that is h/v-stretched is considered as top/left-aligned
 				case HorizontalAlignment.Left:
 					offset.X = 0;
 					break;
@@ -124,6 +127,8 @@ namespace Uno.UI
 					offset.Y = 0;
 					overflow = true;
 					break;
+				case VerticalAlignment.Stretch when e is Popup && clientSize.Height == 0:
+					// without an explicit width/height, a popup that is h/v-stretched is considered as top/left-aligned
 				case VerticalAlignment.Top:
 					offset.Y = 0;
 					break;
