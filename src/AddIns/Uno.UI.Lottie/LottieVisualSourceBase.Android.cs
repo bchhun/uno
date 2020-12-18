@@ -218,6 +218,7 @@ namespace Microsoft.Toolkit.Uwp.UI.Lottie
 			{
 				return;
 			}
+
 			_animation.Progress = (float)progress;
 		}
 

@@ -12,19 +12,63 @@ namespace Microsoft.UI.Xaml.Controls
 {
 	public partial class ProgressRing : Control
 	{
+		private const string ActiveStateName = "Active";
+		private const string DeterminateActiveStateName = "DeterminateActive";
+		private const string InactiveStateName = "Inactive";
+		private const string LottiePlayerName = "LottiePlayer";
+		private const string LayoutRootName = "LayoutRoot";
 		private readonly ILottieVisualSourceProvider _lottieProvider;
 
-		public static DependencyProperty IsActiveProperty { get ; } = DependencyProperty.Register(
-			nameof(IsActive), typeof(bool), typeof(ProgressRing), new FrameworkPropertyMetadata(true, OnIsActivePropertyChanged));
 
 		private AnimatedVisualPlayer _player;
 		private Panel _layoutRoot;
+		private double _oldValue = 0d;
+
+		public static DependencyProperty IsActiveProperty { get; } = DependencyProperty.Register(
+			nameof(IsActive), typeof(bool), typeof(ProgressRing), new FrameworkPropertyMetadata(true, OnIsActivePropertyChanged));
 
 		public bool IsActive
 		{
 			get => (bool)GetValue(IsActiveProperty);
 			set => SetValue(IsActiveProperty, value);
 		}
+
+		public static DependencyProperty IsIndeterminateProperty { get; } = DependencyProperty.Register(
+			nameof(IsIndeterminate), typeof(bool), typeof(ProgressRing), new FrameworkPropertyMetadata(true, OnIsIndeterminatePropertyChanged));
+
+
+		public bool IsIndeterminate
+		{
+			get => (bool)GetValue(IsIndeterminateProperty);
+			set => SetValue(IsIndeterminateProperty, value);
+		}
+
+		public double Value
+		{
+			get { return (double)GetValue(ValueProperty); }
+			set { SetValue(ValueProperty, value); }
+		}
+
+		public static DependencyProperty ValueProperty { get; } = DependencyProperty.Register(
+			nameof(Value), typeof(double), typeof(ProgressRing), new FrameworkPropertyMetadata(0d, (s, e) => (s as ProgressRing)?.OnValuePropertyChanged(e)));
+
+		public double Maximum
+		{
+			get { return (double)GetValue(MaximumProperty); }
+			set { SetValue(MaximumProperty, value); }
+		}
+
+		public static DependencyProperty MaximumProperty { get; } = DependencyProperty.Register(
+			nameof(Maximum), typeof(double), typeof(ProgressRing), new FrameworkPropertyMetadata(100d, (s, e) => (s as ProgressRing)?.OnMaximumPropertyChanged(e)));
+
+		public double Minimum
+		{
+			get { return (double)GetValue(MinimumProperty); }
+			set { SetValue(MinimumProperty, value); }
+		}
+
+		public static DependencyProperty MinimumProperty { get; } = DependencyProperty.Register(
+			nameof(Minimum), typeof(double), typeof(ProgressRing), new FrameworkPropertyMetadata(0d, (s, e) => (s as ProgressRing)?.OnMinimumPropertyChanged(e)));
 
 		public ProgressRing()
 		{
@@ -45,15 +89,21 @@ namespace Microsoft.UI.Xaml.Controls
 
 		protected override void OnApplyTemplate()
 		{
-			_player = GetTemplateChild("IndeterminateAnimatedVisualPlayer") as Windows.UI.Xaml.Controls.AnimatedVisualPlayer;
-			_layoutRoot = GetTemplateChild("LayoutRoot") as Panel;
+			_player = GetTemplateChild(LottiePlayerName) as Windows.UI.Xaml.Controls.AnimatedVisualPlayer;
+			_layoutRoot = GetTemplateChild(LayoutRootName) as Panel;
+
+			SetAnimatedVisualPlayerSource();
 
 			OnForegroundPropertyChanged(this, ForegroundProperty);
 			OnBackgroundPropertyChanged(this, BackgroundProperty);
 
-			SetAnimatedVisualPlayerSource();
-
+			UpdateLottieProgress();
 			ChangeVisualState();
+		}
+
+		private static void OnIsIndeterminatePropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+		{
+			(dependencyObject as ProgressRing)?.ChangeVisualState();
 		}
 
 		private void OnForegroundPropertyChanged(DependencyObject sender, DependencyProperty dp)
@@ -79,13 +129,53 @@ namespace Microsoft.UI.Xaml.Controls
 			(dependencyobject as ProgressRing)?.ChangeVisualState();
 		}
 
+		private void OnValuePropertyChanged(DependencyPropertyChangedEventArgs args)
+		{
+			CoerceValue();
+
+			if (!IsIndeterminate)
+			{
+				UpdateLottieProgress();
+			}
+		}
+
+		private void OnMaximumPropertyChanged(DependencyPropertyChangedEventArgs args)
+		{
+			CoerceMinimum();
+			CoerceValue();
+
+			if (!IsIndeterminate)
+			{
+				UpdateLottieProgress();
+			}
+		}
+		private void OnMinimumPropertyChanged(DependencyPropertyChangedEventArgs args)
+		{
+			CoerceMaximum();
+			CoerceValue();
+
+			if (!IsIndeterminate)
+			{
+				UpdateLottieProgress();
+			}
+		}
+
 		private void SetAnimatedVisualPlayerSource()
 		{
 			if (_lottieProvider != null && _player != null)
 			{
-				var animatedVisualSource = _lottieProvider.CreateTheamableFromLottieAsset(FeatureConfiguration.ProgressRing.ProgressRingAsset);
-				_player.Source = animatedVisualSource;
-				ChangeVisualState();
+				if (IsIndeterminate)
+				{
+					var animatedVisualSource = _lottieProvider.CreateTheamableFromLottieAsset(FeatureConfiguration.ProgressRing.ProgressRingAsset);
+					_player.Source = animatedVisualSource;
+				}
+				else
+				{
+					var animatedVisualSource = _lottieProvider.CreateTheamableFromLottieAsset(FeatureConfiguration.ProgressRing.DeterminateProgressRingAsset);
+					_player.Source = animatedVisualSource;
+				}
+				
+				//ChangeVisualState();
 			}
 			else if (_player != null && _layoutRoot != null)
 			{
@@ -107,16 +197,89 @@ namespace Microsoft.UI.Xaml.Controls
 		{
 			if (IsActive)
 			{
-				// Support for older templates
-				VisualStateManager.GoToState(this, "Active", true);
-
-				var _ = _player?.PlayAsync(0, 1, true);
+				if (IsIndeterminate)
+				{
+					// Support for older templates
+					VisualStateManager.GoToState(this, ActiveStateName, true);
+					SetAnimatedVisualPlayerSource();
+					var _ = _player?.PlayAsync(0, 1, true);
+				}
+				else
+				{
+					VisualStateManager.GoToState(this, DeterminateActiveStateName, true);
+					SetAnimatedVisualPlayerSource();
+					UpdateLottieProgress();
+				}
 			}
 			else
 			{
-				VisualStateManager.GoToState(this, "Inactive", true);
+				VisualStateManager.GoToState(this, InactiveStateName, true);
 				_player?.Stop();
 			}
+		}
+
+		private void UpdateLottieProgress()
+		{
+			if (_player == null)
+			{
+				return;
+			}
+
+			var value = Value;
+			var min = Minimum;
+			var range = Maximum - min;
+			var fromProgress = (_oldValue - min) / range;
+			var toProgress = (value - min) / range;
+
+			if (fromProgress < toProgress)
+			{
+				var _ = _player.PlayAsync(fromProgress, toProgress, false);
+			}
+			else
+			{
+				_player.SetProgress(toProgress);
+			}
+
+			_oldValue = value;
+		}
+
+		private void CoerceMinimum()
+		{
+			var max = Maximum;
+			if (Minimum > max)
+			{
+				Minimum = max;
+			}
+		}
+
+		private void CoerceMaximum()
+		{
+			var min = Minimum;
+			if (Maximum < min)
+			{
+				Maximum = min;
+			}
+		}
+
+		private void CoerceValue()
+		{
+			var value = Value;
+			if (!double.IsNaN(value) && !IsInBounds(value))
+			{
+				var max = Maximum;
+				if (value > max)
+				{
+					Value = max;
+				}
+				else
+				{
+					Value = Minimum;
+				}
+			}
+		}
+		private bool IsInBounds(double value)
+		{
+			return (value >= Minimum && value <= Maximum);
 		}
 	}
 }
